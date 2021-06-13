@@ -1,0 +1,154 @@
+from google.colab import drive
+drive.mount(‘/content/gdrive’)
+
+!git pull
+
+"""## Blog Post Code"""
+
+
+
+"""### Import Packages"""
+
+# import the necessary packages
+import matplotlib.pyplot as plt
+import cv2 as cv2
+import numpy as np
+
+"""### Jupyter Notebooks and Google Colab"""
+
+def plt_imshow(title, image):
+    # BGR to RGB conversia spatiilor de culoare
+	image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	plt.imshow(image)
+	plt.title(title)
+	plt.grid(True)
+	plt.show()
+
+"""### template matching cu openCV
+
+"""
+
+# # construct the argument parser and parse the arguments
+# ap = argparse.ArgumentParser()
+# ap.add_argument("-i", "--image", type=str, required=True,
+# 	help="path to input image where we'll apply template matching")
+# ap.add_argument("-t", "--template", type=str, required=True,
+# 	help="path to template image")
+# args = vars(ap.parse_args())
+
+#cream un dictionar cu cele doua argumente 
+args = {
+    "image": "/root/ecgtemplatematching/opencv-template-matching/opencv-template-matching/images/BBG.png",
+    "template": "/root/ecgtemplatematching/opencv-template-matching/opencv-template-matching/ondeRrabotee.png"
+}
+
+# incarcam imaginea pe care se va face analiza si template-ul
+print("[INFO] loading images...")
+image = cv2.imread(args["image"])
+image.shape
+template = cv2.imread(args["template"],0)
+plt_imshow("Image", image)
+plt_imshow("Template", template)
+
+# convertim cele doua imagini din nou in spatiu de culoare BGR2GRAY
+imageGray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+templateGray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+templateGray = cv2.GaussianBlur(templateGray, (324, 37), 23)
+plt_imshow("ImageconvertetoGRAY",imageGray)
+plt_imshow("TemplateconvertedtoGRAY",templateGray)
+
+# lansam functia de template matching care va intoarce un nparray
+print("[INFO] performing template matching...")
+result = cv2.matchTemplate(imageGray, templateGray,
+	cv2.TM_CCOEFF_NORMED)
+(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(result)
+
+
+w, h = template.shape[::-1]
+#seatarea unui threshold de valoare 0.4 face ca toate undele RR' sa fie detectate , dar exista multiple detectii ale aceleasi figuri ceea ce nu convine
+# Aici este necesara crearea unui algoritm care sa "curete" np.array intors de cv.matchTemplate()
+
+
+# Un np.array de dimensiuni (665,)  a fost obtinut prin rularea codului , si pe axa X s-au observat valori de tipul [40,40,40,40,40,40,40,40,40,40,]
+# in timp ce pe axa Y s-au obtinut valori de tipul [100,101,102,103,...105]
+# In acest caz est clar ca aceeasi unda este detectata de mai multe ori.
+# Aceste multi-detectii trebuiesc restransa la o singura detectie, una dintre idei fiind aceea de a calcula printr-o functie 
+def sensibilitateadetectiei(array,current index,prag):
+    if array[current+1]-array[currant] >prag:\
+         return true 
+    else:
+         return false 
+         
+unde pragul va varia in functie de axa pe care facem masuratoarea:
+Pe axa verticala nu pot fi mai mult de 6 unde detectate intrucat sunt numai 6 unde pe verticala si doua grupe de cate 6
+pe orizontala in practica nu apar mai mult de 20-30 de unde(totul depinzand de frecventa cardiaca)
+daca plecam de la excutia >    w(w=width=latimea ECG)=n(n numarul maxim de unde ce pot fi trasate pe o foaie ECG indiferent de patologie)*latimea undei template+ (n-1)*latimea spatiului dintre unde 
+atunci putem masura care este marimea corecta a distantei intre doua unde detectate , aceasta putand fi folosita ca prag 
+         
+
+
+
+
+
+#duplicate code res = cv.matchTemplate(img_gray,template,cv.TM_CCOEFF_NORMED)
+threshold = 0.38
+loc = np.where( result >= threshold)
+sortedlocx=np.unique(loc[1])
+sortedlocy=np.unique(loc[0])
+print('number of detections',sortedlocx.shape)
+print(sortedlocx)
+newloc = zip(loc[1], loc[0]) 
+count=0
+urmatoareacoordonatape=[]
+nextycoordinate=[]
+finaldetectlist=[]
+#print(tuple(zip(*loc[::-1])))
+for pt in list(sorted(newloc)) :
+  try:
+      urmatoareacoordonatape.append(pt[0])
+      nextycoordinate.append(pt[1])
+      #print(urmatoareacoordonatape)
+      #print(nextycoordinate)
+      currentxindex=urmatoareacoordonatape.index(pt[0])
+      currentyindex=nextycoordinate.index(pt[1])
+      if len(urmatoareacoordonatape) > 1 and len(nextycoordinate) > 1:
+          while pt[1]-nextycoordinate[currentyindex-1] < 50 and pt[0]-urmatoareacoordonatape[currentxindex-1] < 20 :
+             print('matches are too close')
+          else:   
+             cv2.rectangle(image, pt, (pt[0] + w, pt[1] + h), (0,0,255), 1)
+             print(pt[0],pt[1])
+             finaldetectlist.append((pt[0],pt[1]))
+          
+          
+          #nextycoordinate.remove(pt[1])
+          #urmatoareacoordonatape.remove(pt[0])  
+          print('detected very close') 
+                 
+              
+      else:
+         print(pt[0],pt[1])   
+         count+=1 
+  except:
+      pass   
+print(urmatoareacoordonatape)
+print(nextycoordinate) 
+print(finaldetectlist)    
+print(len(finaldetectlist))          
+print(count)
+#cv2.imwrite('res.png',image)
+
+# determine the starting and ending (x, y)-coordinates of the
+# bounding box
+(startX, startY) = maxLoc
+endX = startX + template.shape[1]
+endY = startY + template.shape[0]
+print(endX)
+
+# draw the bounding box on the image
+#cv2.rectangle(image, (startX, startY), (endX, endY), (15, 0, 0), 3)
+
+# show the output image
+finalimage=cv2.resize(image,(640,480))
+plt_imshow("Output", finalimage)
+
+image.shape[::-1]
